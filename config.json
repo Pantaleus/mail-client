@@ -1,17 +1,17 @@
 {
   "imap": {
-    "host": "dub.dub-net.eu",
+    "host": "IMAP Server",
     "port": 993
   },
   "smtp": {
-    "host": "dub.dub-net.eu",
+    "host": "SMTP Server",
     "port": 465,
     "ssl": true,
     "starttls_fallback": true
   },
   "auth": {
-    "user": "python@ps-mail.cz",
-    "password": "supertajne"
+    "user": "Emailová adresa / Login",
+    "password": "Tvoje Heslo"
   },
   "folders": {
     "inbox": "INBOX",
@@ -20,3 +20,4 @@
     "spam": "Junk"
   }
 }
+

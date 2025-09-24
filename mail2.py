@@ -176,6 +176,9 @@ class ImapClient:
 # SMTP
 # ==========================
 
+import mimetypes
+from pathlib import Path
+
 class SmtpClient:
     def __init__(self, host: str, port: int, user: str, password: str):
         self.host = host
@@ -214,7 +217,9 @@ class SmtpClient:
             pass
 
     def send_text(self, to_addrs: List[str], subject: str, body: str,
-                  from_name: Optional[str] = None, imap_client: Optional['ImapClient'] = None):
+                  from_name: Optional[str] = None,
+                  imap_client: Optional['ImapClient'] = None,
+                  attachments: Optional[List[str]] = None):
         msg = EmailMessage()
         sender_display = formataddr((from_name or self.user, self.user))
         msg["From"] = sender_display
@@ -222,20 +227,41 @@ class SmtpClient:
         msg["Subject"] = subject
         msg.set_content(body)
 
+        # --- přílohy ---
+        if attachments:
+            for filepath in attachments:
+                path = Path(filepath)
+                if not path.exists():
+                    print(f"[VAROVÁNÍ] Soubor {filepath} neexistuje, přeskočeno.")
+                    continue
+                ctype, encoding = mimetypes.guess_type(filepath)
+                if ctype is None or encoding is not None:
+                    ctype = "application/octet-stream"
+                maintype, subtype = ctype.split("/", 1)
+                with open(filepath, "rb") as f:
+                    msg.add_attachment(
+                        f.read(),
+                        maintype=maintype,
+                        subtype=subtype,
+                        filename=path.name
+                    )
+            print(f"Přidáno {len(attachments)} příloh.")
+
         # 1) Odeslání přes SMTP
         self.conn.send_message(msg)
         print("SMTP: zpráva odeslána.")
 
-        # 2) Uložení kopie do Sent (pokud je k dispozici IMAP klient)
+        # 2) Uložení kopie do Sent
         if imap_client:
             try:
-                sent_box = FOLDERS["sent"]  # bereme přímo z configu
+                sent_box = FOLDERS["sent"]
                 print(f"IMAP: pokus o zápis do '{sent_box}'…")
                 imap_client.select_mailbox(sent_box)
                 imap_client.conn.append(sent_box, None, None, msg.as_bytes())
                 print(f"IMAP: zpráva zapsána do složky '{sent_box}'.")
             except Exception as e:
                 print(f"IMAP: nepodařilo se uložit do Sent ({e}).")
+
 
 # ==========================
 # UI / APLIKACE
@@ -354,8 +380,20 @@ class MailApp:
                 break
             lines.append(line)
         body = "\n".join(lines)
+
+        attachments = []
+        add_att = input("Chceš přidat přílohy? [y/N]: ").strip().lower()
+        if add_att == "y":
+            while True:
+                path = input("Cesta k příloze (Enter = konec): ").strip()
+                if not path:
+                    break
+                attachments.append(path)
+
         to_addrs = [a.strip() for a in to_line.split(",") if a.strip()]
-        self.smtp.send_text(to_addrs, subject, body, imap_client=self.imap)
+        self.smtp.send_text(to_addrs, subject, body,
+                            imap_client=self.imap,
+                            attachments=attachments if attachments else None)
 
     def reply_to_message(self, original: EmailMessage):
         orig_from = parseaddr(original.get("From"))[1]
